@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) void {
         "show trace logging.  pass -Dlog and set root_module std_options.log_level = .debug to see trace logging.",
     ) orelse false;
     options.addOption(bool, "log", log);
-    const mod = b.addModule("freechr_zig", .{
+    const mod = b.addModule("free_chr_zig", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
@@ -17,12 +17,12 @@ pub fn build(b: *std.Build) void {
     });
 
     // const exe = b.addExecutable(.{
-    //     .name = "zigchr_2",
+    //     .name = "free_chr",
     //     .root_module = b.createModule(.{
     //         .root_source_file = b.path("src/main.zig"),
     //         .target = target,
     //         .optimize = optimize,
-    //         .imports = &.{.{ .name = "zigchr_2", .module = mod }},
+    //         .imports = &.{.{ .name = "free_chr", .module = mod }},
     //     }),
     // });
     // b.installArtifact(exe);

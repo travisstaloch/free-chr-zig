@@ -127,18 +127,18 @@ pub fn State(T: type) type {
     };
 }
 
-pub fn Solver(T: type) type {
+pub fn Solver(T: type, Error: type) type {
     return struct {
-        rules: []const Rule(T),
+        rules: []const Rule(T, Error),
 
         const Self = @This();
 
-        pub fn solve(slvr: Self, state: *State(T)) void {
+        pub fn solve(slvr: Self, state: *State(T)) Error!void {
             while (true) {
                 const old = state.*;
                 for (slvr.rules) |r| {
                     trace("solve {f}", .{state});
-                    r.apply(state);
+                    try r.apply(state);
                 }
                 trace("solve old {f} new {f}\n", .{ old, state });
                 if (old.fields_present.bits == state.fields_present.bits and
@@ -149,17 +149,14 @@ pub fn Solver(T: type) type {
     };
 }
 
-pub fn solver(T: type, rules: []const Rule(T)) Solver(T) {
+pub fn solver(T: type, Error: type, rules: []const Rule(T, Error)) Solver(T, Error) {
     return .{ .rules = rules };
 }
 
-pub fn Rule(T: type) type {
+pub fn Rule(T: type, Error: type) type {
     return struct {
-        guard: *const fn (*State(T)) bool,
-        body: *const fn (*State(T)) void,
-
-        pub const Field = std.meta.FieldEnum(T);
-        pub const FieldSet = std.enums.EnumSet(Field);
+        guard: *const fn (*State(T)) Error!bool,
+        body: *const fn (*State(T)) Error!void,
 
         const Self = @This();
 
@@ -167,13 +164,14 @@ pub fn Rule(T: type) type {
             return .{ .guard = R.guard, .body = R.body };
         }
 
-        pub fn apply(r: Self, s: *State(T)) void {
+        pub fn apply(r: Self, s: *State(T)) Error!void {
             trace("apply s {f}", .{s});
-            if (r.guard(s)) {
+            if (try r.guard(s)) {
                 trace("  guard true", .{});
-                return r.body(s);
+                try r.body(s);
+            } else {
+                trace("  guard false", .{});
             }
-            trace("  guard false", .{});
         }
     };
 }
@@ -188,22 +186,23 @@ const testing = std.testing;
 
 /// supports named struct and tuples by using .fromTuple() and .at()
 fn checkGcd(T: type, expected: anytype, initial: T) !void {
-    const gcd = chr.solver(T, &.{
+    const Error = error{};
+    const gcd = chr.solver(T, Error, &.{
         .init(struct { // a <= 0
-            pub fn guard(s: *State(T)) bool {
+            pub fn guard(s: *State(T)) Error!bool {
                 return if (s.at(0)) |n| n <= 0 else false;
             }
-            pub fn body(s: *State(T)) void {
+            pub fn body(s: *State(T)) Error!void {
                 s.* = .fromTuple(.{ null, s.at(1) });
             }
         }),
         .init(struct { // 0 < a <= b
-            pub fn guard(s: *State(T)) bool {
+            pub fn guard(s: *State(T)) Error!bool {
                 const a = s.at(0) orelse return false;
                 const b = s.at(1) orelse return false;
                 return 0 < a and a <= b;
             }
-            pub fn body(s: *State(T)) void {
+            pub fn body(s: *State(T)) Error!void {
                 s.* = .fromTuple(.{
                     s.at(0),
                     s.at(1).? - s.at(0).?,
@@ -211,12 +210,12 @@ fn checkGcd(T: type, expected: anytype, initial: T) !void {
             }
         }),
         .init(struct { // 0 < b < a
-            pub fn guard(s: *State(T)) bool {
+            pub fn guard(s: *State(T)) Error!bool {
                 const a = s.at(0) orelse return false;
                 const b = s.at(1) orelse return false;
                 return 0 < b and b < a;
             }
-            pub fn body(s: *State(T)) void {
+            pub fn body(s: *State(T)) Error!void {
                 s.* = .fromTuple(.{
                     s.at(1),
                     s.at(0).? - s.at(1).?,
@@ -225,14 +224,9 @@ fn checkGcd(T: type, expected: anytype, initial: T) !void {
         }),
     });
     var s: State(T) = .initFull(initial);
-    gcd.solve(&s);
-    try testing.expectEqual(
-        expected,
-        if (@typeInfo(T).@"struct".is_tuple)
-            s.value[0]
-        else
-            s.value.a,
-    );
+    try gcd.solve(&s);
+
+    try testing.expectEqual(expected, s.at(0));
 }
 
 test "gcd" {
@@ -260,12 +254,13 @@ test "gcd fuzz against std.math.gcd oracle" {
 
 test "fib" {
     const T = struct { i32, i32, i32 };
-    const fib = chr.solver(T, &.{
+    const Error = error{};
+    const fib = chr.solver(T, Error, &.{
         .init(struct { // a > 0
-            pub fn guard(s: *State(T)) bool {
+            pub fn guard(s: *State(T)) Error!bool {
                 return if (s.at(0)) |n| n > 0 else false;
             }
-            pub fn body(s: *State(T)) void {
+            pub fn body(s: *State(T)) Error!void {
                 s.* = .fromTuple(.{
                     s.at(0).? - 1,
                     s.at(2).?,
@@ -276,7 +271,7 @@ test "fib" {
     });
 
     var s: State(T) = .initFull(.{ 3, 4, 5 });
-    fib.solve(&s);
+    try fib.solve(&s);
     const expected = .{ 0, 14, 23 };
     try testing.expectEqual(expected, s.value);
 }
@@ -286,13 +281,14 @@ test "nub list deduplication" {
         input: []const u8,
         output: std.ArrayList(u8),
     };
+    const Error = error{};
 
-    const nub = chr.solver(T, &.{
+    const nub = chr.solver(T, Error, &.{
         .init(struct {
-            pub fn guard(s: *State(T)) bool {
+            pub fn guard(s: *State(T)) Error!bool {
                 return (s.value.input.len != 0);
             }
-            pub fn body(s: *State(T)) void {
+            pub fn body(s: *State(T)) Error!void {
                 if (std.mem.indexOfScalar(u8, s.value.output.items, s.value.input[0]) == null) {
                     s.value.output.appendAssumeCapacity(s.value.input[0]);
                 }
@@ -308,20 +304,21 @@ test "nub list deduplication" {
         .input = input,
         .output = .initBuffer(&output),
     });
-    nub.solve(&s);
+    try nub.solve(&s);
 
     try testing.expectEqualSlices(u8, expected, &output);
 }
 
 test "all different" {
     const T = struct { v: [3]u8 };
-    const all_diff = chr.solver(T, &.{
+    const Error = error{};
+    const all_diff = chr.solver(T, Error, &.{
         .init(struct {
-            pub fn guard(s: *State(T)) bool {
+            pub fn guard(s: *State(T)) Error!bool {
                 const a, const b, const c = s.value.v;
                 return a == b or b == c or a == c;
             }
-            pub fn body(s: *State(T)) void {
+            pub fn body(s: *State(T)) Error!void {
                 const a, const b, const c = s.value.v;
                 if (a == b)
                     s.value.v = .{ a, b + 1, c }
@@ -334,10 +331,7 @@ test "all different" {
     });
 
     var s: State(T) = .initFull(.{ .v = .{ 5, 5, 5 } });
-    all_diff.solve(&s);
-    // std.debug.print("{any}\n", .{s.value.v});
-    // 5, 6, 7
-    try testing.expect(s.value.v[0] != s.value.v[1]);
-    try testing.expect(s.value.v[1] != s.value.v[2]);
-    try testing.expect(s.value.v[0] != s.value.v[2]);
+    try all_diff.solve(&s);
+
+    try testing.expectEqualSlices(u8, &.{ 5, 6, 7 }, &s.value.v);
 }
