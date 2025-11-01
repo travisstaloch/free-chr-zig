@@ -1,0 +1,14 @@
+.{
+    .name = .free_chr_zig,
+    .version = "0.0.1",
+    .minimum_zig_version = "0.15.2",
+    .fingerprint = 0xc7c2b0870b805df7,
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}
