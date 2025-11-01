@@ -133,7 +133,7 @@ pub fn Solver(T: type) type {
 
         const Self = @This();
 
-        pub fn solve(slvr: Self, state: *State(T)) T {
+        pub fn solve(slvr: Self, state: *State(T)) void {
             while (true) {
                 const old = state.*;
                 for (slvr.rules) |r| {
@@ -145,7 +145,6 @@ pub fn Solver(T: type) type {
                     // FIXME: optional user defined eql()
                     std.meta.eql(old.value, state.value)) break;
             }
-            return state.value;
         }
     };
 }
@@ -187,6 +186,7 @@ fn trace(comptime fmt: []const u8, args: anytype) void {
 
 const testing = std.testing;
 
+/// supports named struct and tuples by using .fromTuple() and .at()
 fn checkGcd(T: type, expected: anytype, initial: T) !void {
     const gcd = chr.solver(T, &.{
         .init(struct { // a <= 0
@@ -225,13 +225,13 @@ fn checkGcd(T: type, expected: anytype, initial: T) !void {
         }),
     });
     var s: State(T) = .initFull(initial);
-    const actual = gcd.solve(&s);
+    gcd.solve(&s);
     try testing.expectEqual(
         expected,
         if (@typeInfo(T).@"struct".is_tuple)
-            actual[0]
+            s.value[0]
         else
-            actual.a,
+            s.value.a,
     );
 }
 
@@ -258,8 +258,9 @@ test "gcd fuzz against std.math.gcd oracle" {
     }
 }
 
-fn checkFib(T: type, expected: anytype, initial: T) !void {
-    const gcd = chr.solver(T, &.{
+test "fib" {
+    const T = struct { i32, i32, i32 };
+    const fib = chr.solver(T, &.{
         .init(struct { // a > 0
             pub fn guard(s: *State(T)) bool {
                 return if (s.at(0)) |n| n > 0 else false;
@@ -274,16 +275,10 @@ fn checkFib(T: type, expected: anytype, initial: T) !void {
         }),
     });
 
-    var s: State(T) = .initFull(initial);
-    try testing.expectEqual(expected, gcd.solve(&s));
-}
-
-test "fib" {
-    try checkFib(
-        struct { i32, i32, i32 },
-        .{ 0, 14, 23 },
-        .{ 3, 4, 5 },
-    );
+    var s: State(T) = .initFull(.{ 3, 4, 5 });
+    fib.solve(&s);
+    const expected = .{ 0, 14, 23 };
+    try testing.expectEqual(expected, s.value);
 }
 
 test "nub list deduplication" {
@@ -305,6 +300,7 @@ test "nub list deduplication" {
             }
         }),
     });
+
     const input = &.{ 1, 2, 3, 2, 4, 1, 5 };
     const expected = &.{ 1, 2, 3, 4, 5 };
     var output: [expected.len]u8 = undefined;
@@ -312,7 +308,7 @@ test "nub list deduplication" {
         .input = input,
         .output = .initBuffer(&output),
     });
-    _ = nub.solve(&s);
+    nub.solve(&s);
 
     try testing.expectEqualSlices(u8, expected, &output);
 }
@@ -328,9 +324,9 @@ test "all different" {
             pub fn body(s: *State(T)) void {
                 const a, const b, const c = s.value.v;
                 if (a == b)
-                    s.value.v = .{ a + 1, b, c }
-                else if (b == c)
                     s.value.v = .{ a, b + 1, c }
+                else if (b == c)
+                    s.value.v = .{ a, b, c + 1 }
                 else if (a == c)
                     s.value.v = .{ a, b, c + 1 };
             }
@@ -338,8 +334,10 @@ test "all different" {
     });
 
     var s: State(T) = .initFull(.{ .v = .{ 5, 5, 5 } });
-    const result = all_diff.solve(&s).v;
-    try testing.expect(result[0] != result[1]);
-    try testing.expect(result[1] != result[2]);
-    try testing.expect(result[0] != result[2]);
+    all_diff.solve(&s);
+    // std.debug.print("{any}\n", .{s.value.v});
+    // 5, 6, 7
+    try testing.expect(s.value.v[0] != s.value.v[1]);
+    try testing.expect(s.value.v[1] != s.value.v[2]);
+    try testing.expect(s.value.v[0] != s.value.v[2]);
 }

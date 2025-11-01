@@ -1,4 +1,4 @@
-# A toy Free-CHR implementation
+# A toy Free-CHR instance
 CHR: Constraint Handling Rules
 
 # Features
