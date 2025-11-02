@@ -95,44 +95,42 @@ test "fib" {
 }
 
 test "nub list deduplication" {
-    const T = struct {
-        input: []const u8,
-        output: std.ArrayList(u8),
-    };
+    const T = struct { input: std.ArrayList(u8) };
     const nub = chr.solver(T, .{}, &.{
         .init(struct {
             pub fn guard(s: *State(T)) !bool {
-                return (s.value.input.len != 0);
+                return (s.value.input.items.len != 0);
             }
             pub fn body(s: *State(T)) !void {
-                if (std.mem.indexOfScalar(u8, s.value.output.items, s.value.input[0]) == null) {
-                    s.value.output.appendAssumeCapacity(s.value.input[0]);
+                for (s.value.input.items[1..], 1..) |e, i| {
+                    if (e == s.value.input.items[0]) {
+                        _ = s.value.input.swapRemove(i);
+                    }
                 }
-                s.value.input = s.value.input[1..];
+                s.value.input.items = s.value.input.items[1..];
             }
         }),
     });
 
-    const input = &.{ 1, 2, 3, 2, 4, 1, 5 };
-    const expected = &.{ 1, 2, 3, 4, 5 };
-    var output: [expected.len]u8 = undefined;
-    var s: State(T) = .initFull(.{
-        .input = input,
-        .output = .initBuffer(&output),
-    });
+    var input = [_]u8{ 1, 2, 3, 2, 4, 1, 5 };
+    var s: State(T) = .initFull(.{ .input = .initBuffer(&input) });
+    s.value.input.expandToCapacity();
     try nub.solve(&s);
 
-    try testing.expectEqualSlices(u8, expected, &output);
+    const expected = &.{ 1, 2, 3, 5, 4 };
+    try testing.expectEqualSlices(u8, expected, input[0..expected.len]);
 }
 
 test "all different with custom eql()" {
     const T = struct { v: [3]u8 };
 
-    const all_diff = chr.solver(T, .{ .eql = struct {
-        fn eql(a: anytype, b: anytype) bool {
-            return std.mem.eql(u8, &a.v, &b.v);
-        }
-    }.eql }, &.{
+    const all_diff = chr.solver(T, .{
+        .eql = struct {
+            fn eql(a: anytype, b: anytype) bool {
+                return std.mem.eql(u8, &a.v, &b.v);
+            }
+        }.eql,
+    }, &.{
         .init(struct {
             pub fn guard(s: *State(T)) !bool {
                 const a, const b, const c = s.value.v;
@@ -167,6 +165,5 @@ test "empty rule defaults" {
     const T = struct {};
     const empty = chr.solver(T, .{}, &.{.{}});
     var s: State(T) = .initFull(.{});
-    testing.log_level = .debug;
     try empty.solve(&s);
 }
