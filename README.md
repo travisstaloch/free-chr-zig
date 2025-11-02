@@ -1,5 +1,5 @@
-# A toy Free-CHR instance
-CHR: Constraint Handling Rules
+# About
+A simple toy constraint solver similar to a Free-CHR (Constraint Handling Rules) instance.
 
 # Features
 * no allocations
@@ -9,11 +9,11 @@ CHR: Constraint Handling Rules
 
 # Use
 ```sh
-$ zig build fetch --save git+https://github.com/travisstaloch/freechr
+$ zig build fetch --save git+https://github.com/travisstaloch/free-chr-zig
 ```
 
 # Examples
-see tests at bottom of [src/root.zig](src/root.zig)
+See tests at bottom of [src/root.zig](src/root.zig).
 
 # Resources
 * https://en.wikipedia.org/wiki/Constraint_Handling_Rules
