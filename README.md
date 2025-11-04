@@ -13,7 +13,7 @@ $ zig build fetch --save git+https://github.com/travisstaloch/free-chr-zig
 ```
 
 # Examples
-See tests at bottom of [src/root.zig](src/root.zig).
+See tests in [src/tests.zig](src/tests.zig).
 
 # Resources
 * https://en.wikipedia.org/wiki/Constraint_Handling_Rules
